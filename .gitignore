@@ -167,11 +167,4 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.\*
-/.idea/.gitignore
-/.idea/bun.iml
-/.idea/dbnavigator.xml
-/.idea/highlightedFiles.xml
-/.idea/markdown.xml
-/.idea/misc.xml
-/.idea/modules.xml
-/.idea/prettier.xml
+.idea
