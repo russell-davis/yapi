@@ -1,4 +1,4 @@
-import { DOMParser, IElement } from "happy-dom";
+import { DOMParser, IElement, Window } from "happy-dom";
 import { fetcher } from "./fetcher.ts";
 
 export const tickerUrl = (ticker: string) => {
@@ -8,25 +8,24 @@ export const tickerStatsUrl = (ticker: string) => {
   return `${tickerUrl(ticker)}/key-statistics?p=${ticker}`;
 };
 
+const window = new Window({
+  settings: {
+    disableJavaScriptEvaluation: true,
+    disableCSSFileLoading: true,
+    disableIframePageLoading: true,
+  },
+});
+const parser = new DOMParser();
 export const getTickerData = async (ticker: string) => {
   const summaryUrl = `https://finance.yahoo.com/quote/${ticker}`;
   const statsUrl = `https://finance.yahoo.com/quote/${ticker}/key-statistics?p=${ticker}`;
 
   const opts = {
     headers: {
-      accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-      "accept-encoding": "gzip, deflate, br",
-      "accept-language": "en-GB,en;q=0.9,en-US;q=0.8,ml;q=0.7",
-      "cache-control": "max-age=0",
-      dnt: "1",
-      "sec-fetch-dest": "document",
-      "sec-fetch-mode": "navigate",
-      "sec-fetch-site": "none",
-      "sec-fetch-user": "?1",
-      "upgrade-insecure-requests": "1",
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36",
+      "User-Agent": "PostmanRuntime/7.32.3",
+      Accept: "*/*",
+      "Accept-Encoding": "gzip, deflate, br",
+      Connection: "keep-alive",
     },
   };
 
@@ -49,9 +48,19 @@ export const getTickerData = async (ticker: string) => {
  * @param html - any node above the #quote-summary div
  */
 export const getValuesFromSummaryTable = (html: string) => {
-  const parser = new DOMParser();
+  if (!html) {
+    throw new Error("No html provided");
+  }
+  if (!html.includes("quote-summary")) {
+    throw new Error("No summary found");
+  }
+
   const doc = parser.parseFromString(html, "text/html");
   const summary = doc.querySelector("div#quote-summary");
+
+  if (!summary) {
+    throw new Error("No summary found");
+  }
 
   // two tables: "left-summary-table" and "right-summary-table"
   const leftTable = summary?.querySelector(
