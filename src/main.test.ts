@@ -1,26 +1,10 @@
-import {
-  Mock,
-  beforeAll,
-  describe,
-  expect,
-  jest,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
-import axios from "axios";
-import * as fetcher from "./fetcher.ts";
-import { DOMParser } from "happy-dom";
-import MockAdapter from "axios-mock-adapter";
+import { describe, expect, test } from "bun:test";
 import {
   getFinancialAndTradingInfo,
-  getTickerData,
   getValuationMeasures,
   getValuesFromStatisticsTable,
   getValuesFromSummaryTable,
   statisticsSelector,
-  tickerStatsUrl,
-  tickerUrl,
 } from "./utils.ts";
 
 export const goog_test_data = () => {
