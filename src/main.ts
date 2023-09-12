@@ -1,12 +1,11 @@
 import { getTickerData } from "./utils.ts";
 import { Command } from "commander";
-import { fetcher } from "./fetcher.ts";
-import axios from "axios";
 
-const main = async () => {
+if (import.meta.main) {
+  console.info("Running main");
   const program = new Command();
 
-  program.nameFromFilename("yapi").version("0.0.1");
+  program.version("0.0.1");
 
   program
     .command("yapi <ticker>")
@@ -25,21 +24,7 @@ const main = async () => {
 
       // fetch the data
       const data = await getTickerData(ticker);
-
-      if (!data) {
-        throw new Error("data is null");
-      }
-
-      // log the data to the console
-      const json = JSON.stringify(data, null, 2);
-      console.info({ json });
+      console.info("data", data);
     });
   await program.parseAsync(process.argv);
-};
-
-export default main;
-
-if (import.meta.main) {
-  console.info("Running main");
-  await main();
 }

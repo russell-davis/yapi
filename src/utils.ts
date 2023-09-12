@@ -1,4 +1,4 @@
-import { DOMParser, IElement, Window } from "happy-dom";
+import { Cheerio, Element, load } from "cheerio";
 import { fetcher } from "./fetcher.ts";
 
 export const tickerUrl = (ticker: string) => {
@@ -8,14 +8,6 @@ export const tickerStatsUrl = (ticker: string) => {
   return `${tickerUrl(ticker)}/key-statistics?p=${ticker}`;
 };
 
-const window = new Window({
-  settings: {
-    disableJavaScriptEvaluation: true,
-    disableCSSFileLoading: true,
-    disableIframePageLoading: true,
-  },
-});
-const parser = new DOMParser();
 export const getTickerData = async (ticker: string) => {
   const summaryUrl = `https://finance.yahoo.com/quote/${ticker}`;
   const statsUrl = `https://finance.yahoo.com/quote/${ticker}/key-statistics?p=${ticker}`;
@@ -29,10 +21,8 @@ export const getTickerData = async (ticker: string) => {
     },
   };
 
-  const summaryHtmlReq = await fetcher(summaryUrl, opts);
-  const summaryHtml = summaryHtmlReq.data;
-  const statsHtmlReq = await fetcher(statsUrl, opts);
-  const statsHtml = statsHtmlReq.data;
+  const summaryHtml = await fetcher(summaryUrl, opts);
+  const statsHtml = await fetcher(statsUrl, opts);
 
   const summaryValues = getValuesFromSummaryTable(summaryHtml);
   const statsValues = getValuesFromStatisticsTable(statsHtml);
@@ -55,34 +45,33 @@ export const getValuesFromSummaryTable = (html: string) => {
     throw new Error("No summary found");
   }
 
-  const doc = parser.parseFromString(html, "text/html");
-  const summary = doc.querySelector("div#quote-summary");
+  const $ = load(html);
 
+  const summary = $("div#quote-summary");
   if (!summary) {
     throw new Error("No summary found");
   }
 
   // two tables: "left-summary-table" and "right-summary-table"
-  const leftTable = summary?.querySelector(
-    'div[data-test="left-summary-table"]',
-  );
-  const rightTable = summary?.querySelector(
-    "div[data-test=right-summary-table]",
-  );
+  const leftTable = summary.find('div[data-test="left-summary-table"]');
+  const rightTable = summary.find("div[data-test=right-summary-table]");
+
   // each table has a tbody with trs
   // each tr has two tds: one for the label, one for the value
   // return an object with the label as the key and the value as the value
 
-  const leftTableRows = leftTable?.querySelectorAll("tbody>tr");
-  const leftTableValues = leftTableRows?.map((row) => {
-    const label = row.querySelector("td:nth-child(1)")?.textContent;
-    const value = row.querySelector("td:nth-child(2)")?.textContent;
+  const leftTableRows = leftTable.find("tbody").children("tr");
+  const leftTableValues = leftTableRows?.get().map((row) => {
+    const r = $(row);
+    const label = r.find("td:nth-child(1)")?.text();
+    const value = r.find("td:nth-child(2)")?.text();
     return { label, value };
   });
-  const rightTableRows = rightTable?.querySelectorAll("tbody>tr");
-  const rightTableValues = rightTableRows?.map((row) => {
-    const label = row.querySelector("td:nth-child(1)")?.textContent;
-    const value = row.querySelector("td:nth-child(2)")?.textContent;
+  const rightTableRows = rightTable.find("tbody").children("tr");
+  const rightTableValues = rightTableRows.get().map((row) => {
+    const r = $(row);
+    const label = r.find("td:nth-child(1)")?.text();
+    const value = r.find("td:nth-child(2)")?.text();
     return { label, value };
   });
   // merge the two arrays of objects
@@ -111,9 +100,8 @@ export const getValuesFromSummaryTable = (html: string) => {
  * @param html
  */
 export const statisticsSelector = (html: string) => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const statistics = doc.querySelector('section[data-test="qsp-statistics"]');
+  const $ = load(html);
+  const statistics = $('section[data-test="qsp-statistics"]');
   return statistics;
 };
 /**
@@ -140,7 +128,7 @@ export const getValuesFromStatisticsTable = (html: string) => {
   };
 };
 
-export const getValuationMeasures = (statistics: IElement) => {
+export const getValuationMeasures = (statistics: Cheerio<Element>) => {
   // format of table: thead is the dates going across the top, the first td in each tr is the label, the rest are values
   // the format of the returned object should be:
   /**
@@ -151,8 +139,13 @@ export const getValuationMeasures = (statistics: IElement) => {
    *     ... etc
    * }]
    */
+
+  const html = statistics.html();
+  if (!html) return;
+  const $ = load(html);
+
   // find an h2 with the text "Valuation Measures"
-  const valuationMeasuresH2 = statistics.querySelector(
+  const valuationMeasuresH2 = statistics.find(
     'h2:contains("Valuation Measures")',
   );
   if (!valuationMeasuresH2) {
@@ -160,28 +153,19 @@ export const getValuationMeasures = (statistics: IElement) => {
   }
 
   // check each sibling of the h2 until you find a table
-  let valuationMeasuresTable: IElement | null = null;
-  let sibling = valuationMeasuresH2.nextElementSibling;
-  while (sibling) {
-    // check if the sibling or any of its children are a table
-    const table = sibling.querySelector("table");
-    if (table) {
-      valuationMeasuresTable = table;
-      break;
-    }
-    sibling = sibling.nextElementSibling;
-  }
+  let valuationMeasuresTable = valuationMeasuresH2.siblings().has("table");
 
   if (!valuationMeasuresTable) {
     throw new Error("No Valuation Measures table found");
   }
 
   // header has on tr and the th are the dates. first col is empty, then the dates.
-  const headers = valuationMeasuresTable.querySelectorAll("thead>tr>th");
+  const headers = valuationMeasuresTable.find("thead>tr").children("th");
 
   // filter the headers to only 'current' or date string (m/dd/yyyy)
-  const dates = Array.from(headers)
-    .map((header) => header.textContent)
+  const dates = headers
+    .get()
+    .map((header) => $(header).text())
     .filter(
       (text) =>
         text.includes("Current") || /\d{1,2}\/\d{1,2}\/\d{4}/.test(text),
@@ -194,7 +178,7 @@ export const getValuationMeasures = (statistics: IElement) => {
       return text;
     });
 
-  // console.info({ dates });
+  //  console.info({ dates });
 
   let measuresByDate: Record<string, any>[] = dates.map((date) => {
     return {
@@ -203,74 +187,70 @@ export const getValuationMeasures = (statistics: IElement) => {
   });
 
   // get the rows
-  const rows = valuationMeasuresTable.querySelectorAll("tbody>tr");
+  const rows = valuationMeasuresTable.find("tbody").children("tr");
 
   // get the values from each row
   for (const row of rows) {
     // the first column is the label, the rest are the values for each quarter in descending order from 'current' to oldest
-    const label = row.querySelector("td:nth-child(1)")?.textContent;
+    const label = $(row).find("td:nth-child(1)")?.text();
     if (!label) {
       throw new Error("No label found");
     }
-    const values = Array.from(row.querySelectorAll("td")).slice(1);
-    // console.info({ label, values: values.map((value) => value.textContent) });
+    const values = Array.from($(row).children("td")).slice(1);
+    //    console.info({ label, values: values.map((value) => $(value).text()) });
 
     // loop through the measuresByDate and add the value to the correct quarter
     for (const [index, value] of values.entries()) {
-      // console.info({ value: value.textContent, date: dates[index] });
-      measuresByDate[index][label] = value.textContent;
+      //      console.info({ value: $(value).text(), date: dates[index] });
+      measuresByDate[index][label] = $(value).text();
     }
   }
+
+  //  console.info({
+  //    measuresByDate,
+  //  });
 
   return measuresByDate;
 };
 
-export const getFinancialAndTradingInfo = (statistics: IElement) => {
+export const getFinancialAndTradingInfo = (statistics: Cheerio<Element>) => {
   // format of table: h2 next to a div with several divs containing h3s and tables
   // within the second, Financial Highlights, The table is only two columns: label and value
   // there will be several tables, each
+  const html = statistics.html();
+  if (!html) return;
+  const $ = load(html);
 
-  // find divs with empty classes that have an h3 and a table in them
-  const financialAndTradingHighlights =
-    statistics.querySelectorAll('div[class=""]');
-  // make sure they have an h3 and a table
-  const financialAndTradingHighlightsWithH3AndTable =
-    financialAndTradingHighlights.filter((div) => {
-      const h3 = div.querySelector("h3");
-      const table = div.querySelector("table");
-      return h3 && table;
-    });
+  const sections = statistics
+    .find('div[class=""]:has(> h3, > table)')
+    .get()
+    .map((el, i) => {
+      const div = $(el);
+      const h3 = div.find("h3").text().trim();
+      const table = div.find("table");
+      const rows = table?.find("tbody>tr").get();
+      const values = rows?.map((row) => {
+        const label = $(row).find("td:nth-child(1)")?.text().trim();
+        const value = $(row).find("td:nth-child(2)")?.text().trim();
 
-  let financialAndTradingHighlightsValues: Record<string, string | number> = {};
-
-  financialAndTradingHighlightsWithH3AndTable.forEach((div) => {
-    const h3 = div.querySelector("h3");
-    const table = div.querySelector("table");
-    const rows = table?.querySelectorAll("tbody>tr");
-    const values = rows?.map((row) => {
-      const label = row.querySelector("td:nth-child(1)")?.textContent;
-      const value = row.querySelector("td:nth-child(2)")?.textContent;
-      return { label, value };
-    });
-    const obj = values?.reduce(
-      (acc, cur) => {
-        // if the value is a number, convert it to a number
-        if (cur.label && cur.value) {
-          if (!isNaN(Number(cur.value))) {
-            acc[cur.label.trim()] = Number(cur.value.trim());
-          } else {
-            acc[cur.label.trim()] = cur.value.trim();
-          }
-        }
+        return { label, value };
+      });
+      return {
+        h3,
+        values,
+      };
+    })
+    .reduce(
+      (acc, section) => {
+        section.values.forEach((value) => {
+          acc[value.label] = isNaN(Number(value.value))
+            ? value.value
+            : Number(value.value);
+        });
         return acc;
       },
-      {} as Record<string, string | number>,
+      {} as Record<string, any>,
     );
-    financialAndTradingHighlightsValues = {
-      ...financialAndTradingHighlightsValues,
-      ...obj,
-    };
-  });
 
-  return financialAndTradingHighlightsValues;
+  return sections;
 };
