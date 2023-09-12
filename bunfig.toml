@@ -1,6 +1,3 @@
-[test]
-preload = "./happydom.ts"
-
 [debug]
 # When navigating to a blob: or src: link, open the file in your editor
 # If not, it tries $EDITOR or $VISUAL
