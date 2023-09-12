@@ -34,10 +34,14 @@ if (import.meta.main) {
           ticker,
           data,
         };
-
+        
         if (!!saveTo) {
+          // if format === json
           await Bun.write(saveTo, JSON.stringify(pkg));
           console.info(`Successfully saved to ${saveTo}`);
+          
+          // if format === csv
+          // use csv-json
         }
 
         if (verbose) {
