@@ -1,6 +1,5 @@
 import { getTickerData } from "./utils.ts";
 import { Command } from "commander";
-import { debug } from "util";
 
 if (import.meta.main) {
   console.info("Running main");
